@@ -43,7 +43,7 @@ export default function Home() {
     try {
       const data = await listReports();
       setReports(data);
-    } catch {}
+    } catch { }
     setLoadingReports(false);
   }
 
@@ -73,7 +73,7 @@ export default function Home() {
     <div className="min-h-screen" style={{ background: "var(--ink)" }}>
       {/* Header */}
       <header className="border-b" style={{ borderColor: "var(--border)" }}>
-        <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="w-full px-8 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div
               className="w-8 h-8 rounded flex items-center justify-center"
@@ -83,7 +83,6 @@ export default function Home() {
             </div>
             <span
               className="text-lg font-bold tracking-tight"
-              style={{ fontFamily: "Playfair Display, serif" }}
             >
               Deep Research Agent
             </span>
@@ -92,12 +91,12 @@ export default function Home() {
             className="text-xs font-mono"
             style={{ color: "var(--mist)" }}
           >
-            v1.0 · LangGraph + Claude
+            v1.0
           </span>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-12">
+      <main className="w-full px-8 py-12">
         {/* Hero */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -112,13 +111,12 @@ export default function Home() {
           </p>
           <h1
             className="text-5xl font-black mb-4 leading-tight"
-            style={{ fontFamily: "Playfair Display, serif" }}
           >
             Ask anything.
             <br />
             <span style={{ color: "var(--gold)" }}>Get a 5,000-word report.</span>
           </h1>
-          <p className="text-base max-w-lg" style={{ color: "var(--mist)" }}>
+          <p className="text-base max-w-3xl" style={{ color: "var(--mist)" }}>
             Planner → Researcher → Critic → Writer. Four autonomous nodes search
             the web and ArXiv, cross-reference claims, flag conflicts, and write
             a structured report with confidence scores.

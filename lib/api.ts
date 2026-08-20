@@ -1,11 +1,29 @@
 import axios from "axios";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+// Always use the relative path in the browser to route through the Next.js proxy (avoids CORS).
+// The actual backend URL from your .env file is used by next.config.js for the proxy destination.
+const BASE = "/api/v1";
 
 export const api = axios.create({
   baseURL: BASE,
   timeout: 15000,
 });
+
+export function getWsUrl(id: string) {
+  if (typeof window !== "undefined") {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    
+    // If an absolute URL is explicitly provided, replace http with ws
+    if (BASE.startsWith("http")) {
+      return `${BASE.replace(/^http/, "ws")}/reports/${id}/stream`;
+    }
+    
+    // Otherwise, route through the Next.js proxy
+    return `${protocol}//${window.location.host}${BASE}/reports/${id}/stream`;
+  }
+  
+  return `ws://localhost:8000/api/v1/reports/${id}/stream`;
+}
 
 export interface ResearchRequest {
   query: string;

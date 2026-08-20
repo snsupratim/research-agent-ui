@@ -21,6 +21,7 @@ import {
   fetchReport,
   deleteReport,
   exportReport,
+  getWsUrl,
   Report,
   Citation,
   ConflictFlag,
@@ -51,6 +52,7 @@ export default function ReportPage({ params }: { params: { id: string } }) {
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
+  const [wsLogs, setWsLogs] = useState<{timestamp: string, message: string}[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -71,9 +73,55 @@ export default function ReportPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (!report) return;
     if (report.status === "done" || report.status === "failed") return;
-    const t = setInterval(load, 3000);
+    const t = setInterval(load, 5000); // Polling reduced since we have WS
     return () => clearInterval(t);
   }, [report, load]);
+
+  // WebSocket integration
+  useEffect(() => {
+    if (!report || report.status === "done" || report.status === "failed") return;
+
+    let ws: WebSocket | null = null;
+    let reconnectTimer: NodeJS.Timeout;
+
+    const connectWs = () => {
+      ws = new WebSocket(getWsUrl(params.id));
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const msg = typeof data === "string" ? data : (data.message || data.status || JSON.stringify(data));
+          
+          setWsLogs(prev => [...prev, {
+            timestamp: new Date().toLocaleTimeString([], { hour12: false }),
+            message: msg
+          }].slice(-50)); // keep last 50 logs
+          
+          // Optionally trigger a reload if we detect a major state change
+          if (data.status && data.status !== report.status) {
+            load();
+          }
+        } catch (e) {
+          setWsLogs(prev => [...prev, {
+            timestamp: new Date().toLocaleTimeString([], { hour12: false }),
+            message: event.data
+          }].slice(-50));
+        }
+      };
+
+      ws.onclose = () => {
+        // Reconnect logic
+        reconnectTimer = setTimeout(connectWs, 3000);
+      };
+    };
+
+    connectWs();
+
+    return () => {
+      clearTimeout(reconnectTimer);
+      if (ws) ws.close();
+    };
+  }, [report?.status, params.id, load]);
 
   async function handleDelete() {
     if (!confirm("Delete this report?")) return;
@@ -126,7 +174,7 @@ export default function ReportPage({ params }: { params: { id: string } }) {
           borderColor: "var(--border)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="w-full px-8 py-4 flex items-center justify-between">
           <button
             onClick={() => router.push("/")}
             className="flex items-center gap-2 text-sm transition-opacity hover:opacity-70"
@@ -202,7 +250,7 @@ export default function ReportPage({ params }: { params: { id: string } }) {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-10">
+      <main className="w-full px-8 py-10">
         {/* Query title */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -217,7 +265,6 @@ export default function ReportPage({ params }: { params: { id: string } }) {
           </p>
           <h1
             className="text-3xl font-black leading-snug mb-4"
-            style={{ fontFamily: "Playfair Display, serif" }}
           >
             {report.query}
           </h1>
@@ -252,7 +299,45 @@ export default function ReportPage({ params }: { params: { id: string } }) {
 
         {/* Progress tracker (while running) */}
         {!isDone && !isFailed && (
-          <ProgressTracker status={report.status} stepIdx={stepIdx} />
+          <div className="space-y-6 mb-10">
+            <ProgressTracker status={report.status} stepIdx={stepIdx} />
+            
+            {/* Live WebSocket Logs */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="rounded-xl p-5"
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <h3 className="text-sm font-mono tracking-widest uppercase" style={{ color: "var(--mist)" }}>Live Execution Logs</h3>
+              </div>
+              <div 
+                className="bg-black/40 rounded-lg p-4 font-mono text-xs overflow-y-auto"
+                style={{ height: "200px", color: "var(--paper)", border: "1px solid var(--border)" }}
+              >
+                {wsLogs.length === 0 ? (
+                  <div className="flex h-full items-center justify-center opacity-50">
+                    Waiting for agent stream...
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {wsLogs.map((log, i) => (
+                      <div key={i} className="flex gap-3">
+                        <span style={{ color: "var(--mist)", opacity: 0.7 }}>[{log.timestamp}]</span>
+                        <span className="break-all">{log.message}</span>
+                      </div>
+                    ))}
+                    {/* Empty div for auto-scrolling could be added here */}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
         )}
 
         {/* Failed state */}
@@ -487,7 +572,6 @@ function SectionCard({
       <h2
         className="text-lg font-bold mb-4 pb-3 border-b"
         style={{
-          fontFamily: "Playfair Display, serif",
           color: warning
             ? "var(--accent)"
             : accent
@@ -691,7 +775,6 @@ function CitationDrawer({
             </span>
             <h3
               className="text-lg font-bold mt-1"
-              style={{ fontFamily: "Playfair Display, serif" }}
             >
               {citation.title}
             </h3>
